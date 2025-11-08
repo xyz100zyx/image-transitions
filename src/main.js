@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 import particlePng from "../public/particle.png";
 import { Float32BufferAttribute } from "three/webgpu";
+import { loadImages } from "./load-images";
+import { fillImageDataToNext, getProcessedImageData } from "./image-processing";
 
 const scene = new THREE.Scene();
 
@@ -41,49 +43,52 @@ let material;
 let geometry;
 let pointClouds;
 
-const imageElement = new Image();
-const imageCoords = [];
-imageElement.onload = () => {
-  svgCnvCtx.drawImage(imageElement, 0, 0, svgCnvSize, svgCnvSize);
+let imageCoords = [];
+let images = [];
 
-  const data = svgCnvCtx.getImageData(0, 0, svgCnvSize, svgCnvSize).data;
-  for (let y = 0; y < svgCnvSize; y++) {
-    for (let x = 0; x < svgCnvSize; x++) {
-      const alpha = data[(svgCnvSize * y + x) * 4 + 3];
+loadImages(
+  ["../public/close.svg", "../public/arrow.svg", "../public/place.svg"],
+  (imageElements) => {
+    images = imageElements;
+    const imageElement = imageElements[0];
 
-      if (alpha > 0) {
-        imageCoords.push([
-          10 * (x - svgCnvSize / 2),
-          10 * (y - svgCnvSize / 2),
-        ]);
-      }
-    }
+    svgCnvCtx.drawImage(imageElement, 0, 0, svgCnvSize, svgCnvSize);
+
+    imageCoords = getProcessedImageData(svgCnvCtx, svgCnvSize);
+
+    material = new THREE.PointsMaterial({
+      size: 10,
+      vertexColors: THREE.VertexColors,
+      map: texture,
+      transparent: true,
+      alphaTest: 0.5,
+    });
+
+    const vertices = [];
+    geometry = new THREE.BufferGeometry();
+
+    imageCoords.forEach((el) => {
+      vertices.push(el[0], el[1], Math.random() * 100);
+    });
+    geometry.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+    pointClouds = new THREE.Points(geometry, material);
+    scene.add(pointClouds);
   }
+);
 
-  material = new THREE.PointsMaterial({
-    size: 10,
-    vertexColors: THREE.VertexColors,
-    map: texture,
-    transparent: true,
-    alphaTest: 0.5,
-  });
-
-  const vertices = [];
-  geometry = new THREE.BufferGeometry();
-
-  imageCoords.forEach((el) => {
-    vertices.push(el[0], el[1], Math.random() * 100);
-  });
-  geometry.setAttribute("position", new Float32BufferAttribute(vertices, 3));
-  pointClouds = new THREE.Points(geometry, material);
-  scene.add(pointClouds);
+let transitionState = {
+  isActive: false,
+  startVertices: [],
+  targetVertices: [],
+  progress: 0,
+  duration: 2.0,
 };
-
-imageElement.src = "../public/close.svg";
 
 let index = 0;
 function animate() {
   requestAnimationFrame(animate);
+
+  updateTransition();
 
   cube.rotation.x += 0.01;
   cube.rotation.y += 0.01;
@@ -115,4 +120,76 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+const easeOutCubic = (t) => {
+  return 1 - Math.pow(1 - t, 3);
+};
+
+const easeInOutQuad = (t) => {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+};
+
+const lerp = (a, b, t) => {
+  return a + (b - a) * t;
+};
+
+const clock = new THREE.Clock();
+
+function updateTransition() {
+  if (!transitionState.isActive) return;
+
+  const delta = clock.getDelta();
+  transitionState.progress += delta / transitionState.duration;
+  transitionState.progress = Math.min(transitionState.progress, 1);
+
+  const t = easeOutCubic(transitionState.progress);
+  const positions = geometry.attributes.position.array;
+
+  for (let i = 0; i < positions.length; i++) {
+    positions[i] = lerp(
+      transitionState.startVertices[i],
+      transitionState.targetVertices[i],
+      t
+    );
+  }
+
+  geometry.attributes.position.needsUpdate = true;
+
+  if (transitionState.progress >= 1) {
+    transitionState.isActive = false;
+  }
+}
+
+let activemImage = 0;
+
+document.body.addEventListener("click", () => {
+  activemImage = (activemImage + 1) % 3;
+  const nextImage = images[activemImage];
+
+  svgCnvCtx.drawImage(nextImage, 0, 0, svgCnvSize, svgCnvSize);
+
+  const nextImageCoords = getProcessedImageData(svgCnvCtx, svgCnvSize);
+  const transitionImageData = fillImageDataToNext(imageCoords, nextImageCoords);
+
+  const transitionVertices = [];
+  transitionImageData.forEach((el) => {
+    transitionVertices.push(el[0], el[1], Math.random() * 100);
+  });
+  geometry.setAttribute(
+    "position",
+    new Float32BufferAttribute(transitionVertices, 3)
+  );
+
+  const nextVertices = [];
+
+  transitionState.startVertices = [...geometry.getAttribute("position").array];
+
+  nextImageCoords.forEach((el) => {
+    nextVertices.push(el[0], el[1], Math.random() * 100);
+  });
+  transitionState.targetVertices = nextVertices;
+
+  transitionState.progress = 0;
+  transitionState.isActive = true;
 });
