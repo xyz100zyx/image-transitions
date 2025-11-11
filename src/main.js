@@ -163,10 +163,13 @@ function updateTransition() {
 
 let activemImage = 0;
 
-document.body.addEventListener("click", () => {
+document.body.addEventListener("keypress", (e) => {
+  if (e.code !== "KeyR" || !e.ctrlKey) return;
+
   activemImage = (activemImage + 1) % 3;
   const nextImage = images[activemImage];
 
+  svgCnvCtx.clearRect(0, 0, svgCnvSize, svgCnvSize);
   svgCnvCtx.drawImage(nextImage, 0, 0, svgCnvSize, svgCnvSize);
 
   const nextImageCoords = getProcessedImageData(svgCnvCtx, svgCnvSize);
@@ -176,13 +179,13 @@ document.body.addEventListener("click", () => {
   transitionImageData.forEach((el) => {
     transitionVertices.push(el[0], el[1], Math.random() * 100);
   });
+
   geometry.setAttribute(
     "position",
     new Float32BufferAttribute(transitionVertices, 3)
   );
 
   const nextVertices = [];
-
   transitionState.startVertices = [...geometry.getAttribute("position").array];
 
   nextImageCoords.forEach((el) => {
@@ -192,4 +195,6 @@ document.body.addEventListener("click", () => {
 
   transitionState.progress = 0;
   transitionState.isActive = true;
+
+  imageCoords = nextImageCoords;
 });

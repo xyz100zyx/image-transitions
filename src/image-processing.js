@@ -22,23 +22,25 @@ export const fillImageDataToNext = (currentImageData, nextImageData) => {
 
   if (nid.length <= cid.length) {
     const data = [];
-    for (let i = 0; i < nid.length; ) {
-      data.push([nid[i], nid[i + 1]]);
+    for (let i = 0; i < cid.length; ) {
+      data.push([cid[i], cid[i + 1]]);
       i += 2;
     }
     return data;
   }
 
-  const diff = nid.length - cid.length;
-  for (let i = 0; i < Math.floor(diff / 2); i++) {
-    const el = nid[cid.length + i];
+  if (nid.length === cid.length) return currentImageData;
 
-    cid.push(el);
+  const diff = nid.length - cid.length;
+  const transitionData = cid;
+  for (let i = 0; i < diff; i++) {
+    const el = nid[i];
+    transitionData.push(el);
   }
 
   const data = [];
-  for (let i = 0; i < cid.length; ) {
-    data.push([cid[i], cid[i + 1]]);
+  for (let i = 0; i < transitionData.length; ) {
+    data.push([transitionData[i], transitionData[i + 1]]);
     i += 2;
   }
 
